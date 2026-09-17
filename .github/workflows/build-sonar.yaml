@@ -38,13 +38,68 @@ jobs:
           gradle clean classes --no-daemon
 
           echo "=== Compiled classes ==="
-          find build -type f -name "*.class" | head -30
+          find build/classes/java/main -type f -name "*.class" | head -30
 
           echo "=== Number of compiled classes ==="
-          find build -type f -name "*.class" | wc -l
+          find build/classes/java/main -type f -name "*.class" | wc -l
 
           echo "=== Build directories ==="
           find build -maxdepth 5 -type d | sort
+
+      - name: Resolve Gradle dependencies for Sonar
+        run: |
+          cat > /tmp/sonar-classpath.gradle <<'EOF'
+          allprojects {
+              tasks.register("printSonarClasspath") {
+                  doLast {
+                      println sourceSets.main.runtimeClasspath.asPath
+                  }
+              }
+          }
+          EOF
+
+          gradle \
+            -I /tmp/sonar-classpath.gradle \
+            printSonarClasspath \
+            --quiet \
+            --no-daemon > /tmp/runtime-classpath.txt
+
+          echo "=== Gradle runtime classpath ==="
+          cat /tmp/runtime-classpath.txt
+
+          # Extract JARs only. Sonar's binaries are supplied separately.
+          tr ':' '\n' < /tmp/runtime-classpath.txt \
+            | grep '\.jar$' \
+            | sort -u > /tmp/sonar-libraries.txt
+
+          echo "=== Dependency JARs ==="
+          cat /tmp/sonar-libraries.txt
+
+          echo "=== Number of dependency JARs ==="
+          wc -l < /tmp/sonar-libraries.txt
+
+          # sonar.java.libraries accepts comma-separated paths
+          SONAR_LIBRARIES=$(paste -sd, /tmp/sonar-libraries.txt)
+
+          echo "SONAR_LIBRARIES=$SONAR_LIBRARIES" >> "$GITHUB_ENV"
+
+      - name: Verify Sonar Java inputs
+        run: |
+          echo "=== Java binaries ==="
+          find build/classes/java/main -type f -name "*.class" | head -30
+
+          echo "=== Java libraries ==="
+          echo "$SONAR_LIBRARIES" | tr ',' '\n'
+
+          echo "=== Check dependency JARs exist ==="
+          echo "$SONAR_LIBRARIES" \
+            | tr ',' '\n' \
+            | while read -r jar; do
+                if [ ! -f "$jar" ]; then
+                  echo "MISSING: $jar"
+                  exit 1
+                fi
+              done
 
       - name: SonarQube Scan
         uses: SonarSource/sonarqube-scan-action@v8.2.1
@@ -55,5 +110,6 @@ jobs:
             -Dsonar.projectKey=appsec-bench_AltoroJ-build
             -Dsonar.organization=appsec-bench
             -Dsonar.sources=src,WebContent
-            -Dsonar.java.binaries=build/classes
+            -Dsonar.java.binaries=build/classes/java/main
+            -Dsonar.java.libraries=${{ env.SONAR_LIBRARIES }}
             -Dsonar.verbose=true
