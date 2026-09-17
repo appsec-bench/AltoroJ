@@ -19,15 +19,18 @@ jobs:
           distribution: temurin
           java-version: '8'
 
-      - name: Install Gradle 4.10.3
+      - name: Install Gradle 6.9.4
         run: |
-          wget -q https://services.gradle.org/distributions/gradle-4.10.3-bin.zip
-          unzip -q gradle-4.10.3-bin.zip
-          echo "$PWD/gradle-4.10.3/bin" >> "$GITHUB_PATH"
+          wget -q https://services.gradle.org/distributions/gradle-6.9.4-bin.zip
+          unzip -q gradle-6.9.4-bin.zip
+          echo "$PWD/gradle-6.9.4/bin" >> "$GITHUB_PATH"
 
-      - name: Check Gradle and Java versions
+      - name: Check Java and Gradle versions
         run: |
+          echo "=== Java ==="
           java -version
+
+          echo "=== Gradle ==="
           gradle --version
 
       - name: Build AltoroJ
@@ -41,7 +44,7 @@ jobs:
           find build -type f -name "*.class" | wc -l
 
           echo "=== Build directories ==="
-          find build -maxdepth 4 -type d | sort
+          find build -maxdepth 5 -type d | sort
 
       - name: SonarQube Scan
         uses: SonarSource/sonarqube-scan-action@v8.2.1
