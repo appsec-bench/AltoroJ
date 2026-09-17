@@ -1,0 +1,48 @@
+name: SonarQube Cloud Build-Based Scan
+
+on:
+  workflow_dispatch:
+
+jobs:
+  sonar:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Set up Java 8
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '8'
+
+      - name: Install Gradle 3.0
+        run: |
+          wget -q https://services.gradle.org/distributions/gradle-3.0-bin.zip
+          unzip -q gradle-3.0-bin.zip
+          echo "$PWD/gradle-3.0/bin" >> "$GITHUB_PATH"
+
+      - name: Build AltoroJ
+        run: |
+          gradle clean classes --no-daemon
+
+          echo "=== Compiled classes ==="
+          find build -type f -name "*.class" | head -30
+
+          echo "=== Number of compiled classes ==="
+          find build -type f -name "*.class" | wc -l
+
+      - name: SonarQube Scan
+        uses: SonarSource/sonarqube-scan-action@v8.2.1
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        with:
+          args: >
+            -Dsonar.projectKey=appsec-bench_AltoroJ-build
+            -Dsonar.organization=appsec-bench
+            -Dsonar.sources=src,WebContent
+            -Dsonar.java.binaries=build/classes
+            -Dsonar.verbose=true
